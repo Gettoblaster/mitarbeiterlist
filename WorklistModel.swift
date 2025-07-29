@@ -45,6 +45,7 @@ struct Worker: Codable, Identifiable {
             try loc.encode(name, forKey: .locationName)
         }
     }
+
 }
 
 enum SortOption: String, CaseIterable, Identifiable {
@@ -125,5 +126,28 @@ final class WorkersListViewModel: ObservableObject {
                 }
             }
         }.resume()
+
+        APIClient.shared.getJSON(url) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let json):
+                    guard let arr = json as? [[String: Any]] else {
+                        self.errorMessage = "Ungültiges JSON-Format"
+                        return
+                    }
+                    self.allWorkers = arr.compactMap { dict -> Worker? in
+                        guard let id = dict["userId"] as? Int,
+                              let name = dict["name"] as? String else { return nil }
+
+                        let locName = (dict["currentLocation"] as? [String: Any])?["locationName"] as? String
+
+                        return Worker(userID: id, userName: name, locationName: locName)
+                    }
+                case .failure(let err):
+                    self.errorMessage = err.localizedDescription
+                }
+            }
+        }
+
     }
 }
