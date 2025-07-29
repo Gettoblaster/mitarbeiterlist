@@ -34,6 +34,18 @@ struct Worker: Codable, Identifiable {
             locationName = nil
         }
     }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(userID, forKey: .userID)
+        try container.encode(userName, forKey: .userName)
+        if let name = locationName {
+            var loc = container.nestedContainer(keyedBy: LocationKeys.self,
+                                               forKey: .currentLocation)
+            try loc.encode(name, forKey: .locationName)
+        }
+    }
+
 }
 
 enum SortOption: String, CaseIterable, Identifiable {
@@ -104,14 +116,12 @@ final class WorkersListViewModel: ObservableObject {
                         self.errorMessage = "Ungültiges JSON-Format"
                         return
                     }
-                    self.allWorkers = arr.compactMap { dict in
+                    self.allWorkers = arr.compactMap { dict -> Worker? in
                         guard let id = dict["userId"] as? Int,
                               let name = dict["name"] as? String else { return nil }
 
-                        var locName: String?
-                        if let cur = dict["currentLocation"] as? [String: Any] {
-                            locName = cur["locationName"] as? String
-                        }
+                        let locName = (dict["currentLocation"] as? [String: Any])?["locationName"] as? String
+
                         return Worker(userID: id, userName: name, locationName: locName)
                     }
                 case .failure(let err):
