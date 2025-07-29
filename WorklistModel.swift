@@ -3,11 +3,37 @@ import Combine
 
 
 
+/// Employee representation returned by `/web/all-user-current-location`
 struct Worker: Codable, Identifiable {
     let userID: Int
     let userName: String
     var locationName: String?
+
     var id: Int { userID }
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "userId"
+        case userName = "name"
+        case currentLocation
+    }
+
+    enum LocationKeys: String, CodingKey {
+        case locationId
+        case locationName
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userID = try container.decode(Int.self, forKey: .userID)
+        userName = try container.decode(String.self, forKey: .userName)
+
+        if let locContainer = try? container.nestedContainer(keyedBy: LocationKeys.self,
+                                                             forKey: .currentLocation) {
+            locationName = try locContainer.decode(String.self, forKey: .locationName)
+        } else {
+            locationName = nil
+        }
+    }
 }
 
 enum SortOption: String, CaseIterable, Identifiable {
@@ -16,11 +42,13 @@ enum SortOption: String, CaseIterable, Identifiable {
     var id: Self { self }
 }
 
-// J json decoder
-func decodeMitarbeiter() -> [Worker] {
-    let url  = Bundle.main.url(forResource: "Mitarbeiter", withExtension: "json")!
-    let data = try! Data(contentsOf: url)
-    return try! JSONDecoder().decode([Worker].self, from: data)
+// Backend host helper for simulator/real device
+private var backendHost: String {
+#if targetEnvironment(simulator)
+    return "localhost"
+#else
+    return "172.16.42.23"
+#endif
 }
 
 
@@ -31,6 +59,7 @@ final class WorkersListViewModel: ObservableObject {
     @Published var searchText: String = ""
     
     @Published private(set) var allWorkers: [Worker] = []
+    @Published var errorMessage: String?
     
     // sfilter plius sortier funktion
     var filteredWorkers: [Worker] {
@@ -56,8 +85,39 @@ final class WorkersListViewModel: ObservableObject {
     init() {
         loadWorkers()
     }
-    
-    private func loadWorkers() {
-        allWorkers = decodeMitarbeiter()
+
+    /// Loads workers with their current location from the backend.
+    func loadWorkers() {
+        errorMessage = nil
+        allWorkers = []
+
+        guard let url = URL(string: "http://\(backendHost):3000/web/all-user-current-location") else {
+            errorMessage = "Ungültige URL"
+            return
+        }
+
+        APIClient.shared.getJSON(url) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let json):
+                    guard let arr = json as? [[String: Any]] else {
+                        self.errorMessage = "Ungültiges JSON-Format"
+                        return
+                    }
+                    self.allWorkers = arr.compactMap { dict in
+                        guard let id = dict["userId"] as? Int,
+                              let name = dict["name"] as? String else { return nil }
+
+                        var locName: String?
+                        if let cur = dict["currentLocation"] as? [String: Any] {
+                            locName = cur["locationName"] as? String
+                        }
+                        return Worker(userID: id, userName: name, locationName: locName)
+                    }
+                case .failure(let err):
+                    self.errorMessage = err.localizedDescription
+                }
+            }
+        }
     }
 }
