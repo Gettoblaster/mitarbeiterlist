@@ -108,6 +108,25 @@ final class WorkersListViewModel: ObservableObject {
             return
         }
 
+        URLSession.shared.dataTask(with: url) { data, response, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    self.errorMessage = error.localizedDescription
+                    return
+                }
+                guard let data = data else {
+                    self.errorMessage = "Keine Daten erhalten"
+                    return
+                }
+                do {
+                    let decoded = try JSONDecoder().decode([Worker].self, from: data)
+                    self.allWorkers = decoded
+                } catch {
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+        }.resume()
+
         APIClient.shared.getJSON(url) { result in
             DispatchQueue.main.async {
                 switch result {
@@ -129,5 +148,6 @@ final class WorkersListViewModel: ObservableObject {
                 }
             }
         }
+
     }
 }
