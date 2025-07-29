@@ -1,94 +1,45 @@
-//
-//  WorkersListView.swift
-//  YourAppName
-//
-//  Created by You on YYYY/MM/DD.
-//
-
 import SwiftUI
 
-/// Modell für deine Locations (aus dem Backend)
-struct LocationModel: Codable, Identifiable {
-    let locationID: Int
-    let locationName: String
-    
-    // Für SwiftUI Identifiable
-    var id: Int { locationID }
-}
-
+/// Displays all workers with their current location fetched from the backend
 struct WorkersListView: View {
-    @State private var locations: [LocationModel] = []
-    @State private var errorMessage: String?
+    @StateObject private var viewModel = WorkersListViewModel()
 
     var body: some View {
         NavigationStack {
             Group {
-                if let error = errorMessage {
+                if let error = viewModel.errorMessage {
                     Text("Fehler: \(error)")
                         .foregroundColor(.red)
                         .multilineTextAlignment(.center)
                         .padding()
-                } else if locations.isEmpty {
-                    ProgressView("Lade Standorte…")
+                } else if viewModel.allWorkers.isEmpty {
+                    ProgressView("Lade Mitarbeiter…")
                 } else {
-                    List(locations) { loc in
-                        Text(loc.locationName)
+                    List(viewModel.filteredWorkers) { worker in
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(worker.userName)
+                                Text(worker.locationName ?? "Abwesend")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
                     }
                     .listStyle(.plain)
                 }
             }
-            .navigationTitle("Standorte")
+            .navigationTitle("Mitarbeiter")
+            .searchable(text: $viewModel.searchText)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Refresh") {
-                        loadLocations()
+                    Picker("Sort", selection: $viewModel.sortOption) {
+                        ForEach(SortOption.allCases) { opt in
+                            Text(opt.rawValue).tag(opt)
+                        }
                     }
                 }
-            }
-        }
-        .onAppear(perform: loadLocations)
-    }
-
-    private func loadLocations() {
-        errorMessage = nil
-        locations = []
-
-        // localhost im Simulator, LAN‑IP auf echtem Gerät
-        #if targetEnvironment(simulator)
-        let host = "localhost"
-        #else
-        let host = "172.16.42.23"
-        #endif
-
-        guard let url = URL(string: "http://\(host):3000/web/allLocations") else {
-            errorMessage = "Ungültige URL"
-            return
-        }
-
-        APIClient.shared.getJSON(url) { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let json):
-                    guard let arr = json as? [[String: Any]] else {
-                        errorMessage = "Ungültiges JSON-Format"
-                        return
-                    }
-                    locations = arr.compactMap { dict in
-                        guard
-                            let id   = dict["locationID"]  as? Int,
-                            let name = dict["locationName"] as? String
-                        else { return nil }
-                        return LocationModel(locationID: id,
-                                             locationName: name)
-                    }
-                case .failure(let err):
-                    if let urlErr = err as? URLError {
-                        errorMessage = "Network Error: \(urlErr.code)"
-                        print("🔴 URLError:", urlErr)
-                    } else {
-                        errorMessage = err.localizedDescription
-                        print("🔴 Error:", err)
-                    }
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Refresh") { viewModel.loadWorkers() }
                 }
             }
         }
