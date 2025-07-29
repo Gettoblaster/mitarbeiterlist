@@ -107,25 +107,23 @@ final class WorkersListViewModel: ObservableObject {
             return
         }
 
-        APIClient.shared.getJSON(url) { result in
+        URLSession.shared.dataTask(with: url) { data, response, error in
             DispatchQueue.main.async {
-                switch result {
-                case .success(let json):
-                    guard let arr = json as? [[String: Any]] else {
-                        self.errorMessage = "Ungültiges JSON-Format"
-                        return
-                    }
-                    self.allWorkers = arr.compactMap { dict -> Worker? in
-                        guard let id = dict["userId"] as? Int,
-                              let name = dict["name"] as? String else { return nil }
-
-                        let locName = (dict["currentLocation"] as? [String: Any])?["locationName"] as? String
-                        return Worker(userID: id, userName: name, locationName: locName)
-                    }
-                case .failure(let err):
-                    self.errorMessage = err.localizedDescription
+                if let error = error {
+                    self.errorMessage = error.localizedDescription
+                    return
+                }
+                guard let data = data else {
+                    self.errorMessage = "Keine Daten erhalten"
+                    return
+                }
+                do {
+                    let decoded = try JSONDecoder().decode([Worker].self, from: data)
+                    self.allWorkers = decoded
+                } catch {
+                    self.errorMessage = error.localizedDescription
                 }
             }
-        }
+        }.resume()
     }
 }
