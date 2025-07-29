@@ -45,6 +45,7 @@ struct Worker: Codable, Identifiable {
             try loc.encode(name, forKey: .locationName)
         }
     }
+
 }
 
 enum SortOption: String, CaseIterable, Identifiable {
@@ -120,6 +121,7 @@ final class WorkersListViewModel: ObservableObject {
                               let name = dict["name"] as? String else { return nil }
 
                         let locName = (dict["currentLocation"] as? [String: Any])?["locationName"] as? String
+
                         return Worker(userID: id, userName: name, locationName: locName)
                     }
                 case .failure(let err):
